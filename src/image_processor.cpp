@@ -222,6 +222,7 @@ bool ImageProcessor::processImage(const ImageDataPtr& msg,
 void ImageProcessor::integrateImuData(Matx33f& cam_R_p2c,
         const std::vector<ImuData>& imu_msg_buffer) {
     // Find the start and the end limit within the imu msg buffer.
+    // 查找与当前帧相差10ms的imu的数据
     auto begin_iter = imu_msg_buffer.begin();
     while (begin_iter != imu_msg_buffer.end()) {
     if (begin_iter->timeStampToSec-
@@ -241,6 +242,7 @@ void ImageProcessor::integrateImuData(Matx33f& cam_R_p2c,
     }
 
     // Compute the mean angular velocity in the IMU frame.
+    // 计算这个段时间角速度的平均值
     Vec3f mean_ang_vel(0.0, 0.0, 0.0);
     for (auto iter = begin_iter; iter < end_iter; ++iter)
     mean_ang_vel += Vec3f(iter->angular_velocity[0],
@@ -251,9 +253,11 @@ void ImageProcessor::integrateImuData(Matx33f& cam_R_p2c,
 
     // Transform the mean angular velocity from the IMU
     // frame to the cam0 and cam1 frames.
+    // 平均角速度度变换到相机坐标系
     Vec3f cam_mean_ang_vel = R_cam_imu.t() * mean_ang_vel;
 
     // Compute the relative rotation.
+    // 相对旋转 = 两帧图像的时间间隔*平均角速度
     double dtime = curr_img_ptr->timeStampToSec-
         prev_img_ptr->timeStampToSec;
     Rodrigues(cam_mean_ang_vel*dtime, cam_R_p2c);
