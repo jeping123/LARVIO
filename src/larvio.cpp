@@ -23,6 +23,7 @@
 #include <larvio/math_utils.hpp>
 
 #include <opencv2/core/utility.hpp>
+#include <chrono>
 
 using namespace std;
 using namespace Eigen;
@@ -187,7 +188,7 @@ bool LarVio::loadParameters() {
 
   // Transformation offsets between the frames involved.
   cv::Mat T_imu_cam;
-  fsSettings["T_cam_imu"] >> T_imu_cam;
+  fsSettings["T_cam_imu"] >> T_imu_cam;//输入参数为imu->cam
   cv::Matx33d R_imu_cam(T_imu_cam(cv::Rect(0,0,3,3)));
   cv::Vec3d t_imu_cam = T_imu_cam(cv::Rect(3,0,1,3));
   Matrix3d R_imu_cam_eigen;
@@ -197,7 +198,7 @@ bool LarVio::loadParameters() {
   Isometry3d T_imu_cam0;
   T_imu_cam0.linear() = R_imu_cam_eigen;
   T_imu_cam0.translation() = t_imu_cam_eigen;
-  Isometry3d T_cam0_imu = T_imu_cam0.inverse();
+  Isometry3d T_cam0_imu = T_imu_cam0.inverse();//cam->imu
 
   state_server.imu_state.R_imu_cam0 = T_cam0_imu.linear().transpose();
   state_server.imu_state.t_cam0_imu = T_cam0_imu.translation() + 0.0*Vector3d::Random();
@@ -275,6 +276,7 @@ bool LarVio::loadParameters() {
 
   // If apply Schmidt EKF
   use_schmidt = (static_cast<int>(fsSettings["use_schmidt"]) ? true : false);
+  string save_path = fsSettings["save_path"];
 
   // Print VIO setup
   cout << endl << "===========================================" << endl;
@@ -306,7 +308,9 @@ bool LarVio::loadParameters() {
           cout << "Applying Schmidt EKF" << endl;
   }
   cout << "===========================================" << endl << endl;
-
+    save_file_name = save_path + "/larvio_trajectory.txt";
+    std::ofstream foutC(save_file_name);
+    foutC.close();
   return true;
 }
 
@@ -362,6 +366,8 @@ bool LarVio::initialize() {
 
 bool LarVio::processFeatures(MonoCameraMeasurementPtr msg,
         std::vector<ImuData>& imu_msg_buffer) {
+      std::chrono::system_clock::time_point start_ = std::chrono::system_clock::now();
+
   // features are not utilized until receiving imu msgs ahead
   if (!bFirstFeatures) {
       if ((imu_msg_buffer.begin() != imu_msg_buffer.end()) &&
@@ -457,7 +463,54 @@ bool LarVio::processFeatures(MonoCameraMeasurementPtr msg,
     active_slam_features[fid] = map_server[fid];
   }
 
+  auto end = std::chrono::system_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start_);
+  double t = double(duration.count()) * std::chrono::microseconds::period::num /
+             std::chrono::microseconds::period::den;
+  printf("nGrabImageMonocular cost:%f ms\n", t * 1000);
+  all_time_cost += t;
+  all_frame_size++;
+  printf("all frame:%d, nGrabImageMonocular mean cost:%f ms\n", all_frame_size,
+  all_time_cost / all_frame_size * 1000);
+
+  saveFrameTrajectory(save_file_name);
   return true;
+}
+
+void LarVio::saveFrameTrajectory(const std::string &output_path)
+{
+    if (is_gravity_set) {
+        Eigen::Vector3d t_i2w = state_server.imu_state.position;
+        Eigen::Vector4d q_w2i_tmp = state_server.imu_state.orientation;
+        Quaterniond q_w2i;
+        q_w2i.x() = q_w2i_tmp(0);
+        q_w2i.y() = q_w2i_tmp(1);
+        q_w2i.z() = q_w2i_tmp(2);
+        q_w2i.w() = q_w2i_tmp(3);
+        Eigen::Matrix3d R_i2w = q_w2i.toRotationMatrix().transpose();
+
+        Eigen::Matrix3d R_c2i = state_server.imu_state.R_imu_cam0.transpose();
+        Eigen::Vector3d t_c2i = state_server.imu_state.t_cam0_imu;
+
+        Eigen::Matrix3d R_c2w = R_i2w * R_c2i;
+        Eigen::Vector3d t_c2w = R_i2w * t_c2i + t_i2w;
+
+
+         Eigen::Quaterniond Q = Eigen::Quaterniond(R_c2w);
+         ofstream foutC(output_path, ios::app);
+         foutC.setf(ios::fixed, ios::floatfield);
+         foutC << state_server.imu_state.time << " ";
+         foutC.precision(7);
+         foutC << t_c2w.x() << " "
+               << t_c2w.y() << " "
+               << t_c2w.z() << " "
+               << Q.x() << " "
+               << Q.y() << " "
+               << Q.z() << " "
+               << Q.w() << endl;
+         foutC.close();
+     }
+
 }
 
 

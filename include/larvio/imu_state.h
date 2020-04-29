@@ -45,15 +45,15 @@ struct IMUState {
   // Orientation
   // Take a quaternion from the world frame to
   // the IMU (body) frame.
-  Eigen::Vector4d orientation;
+  Eigen::Vector4d orientation;// w->i
 
   // Position of the IMU (body) frame
   // in the world frame.
-  Eigen::Vector3d position;
+  Eigen::Vector3d position;//i->w
 
   // Velocity of the IMU (body) frame
   // in the world frame.
-  Eigen::Vector3d velocity;
+  Eigen::Vector3d velocity;//i->w
 
   // Bias for measured angular velocity
   // and acceleration.
@@ -62,8 +62,8 @@ struct IMUState {
 
   // Transformation between the IMU and the
   // left camera (cam0)
-  Eigen::Matrix3d R_imu_cam0;
-  Eigen::Vector3d t_cam0_imu;
+  Eigen::Matrix3d R_imu_cam0;//imu->cam
+  Eigen::Vector3d t_cam0_imu;//cam->imu
 
   // Gravity vector in the world frame
   static Eigen::Vector3d gravity;

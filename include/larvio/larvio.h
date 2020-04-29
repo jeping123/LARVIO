@@ -147,6 +147,10 @@ class LarVio {
      *    Load parameters from the parameter server.
      */
     bool loadParameters();
+    void saveFrameTrajectory(const std::string &output_path);
+    string save_file_name;
+    double all_time_cost = 0.f;
+    int all_frame_size = 0;
 
     // Filter related functions
     // Propogate the state
