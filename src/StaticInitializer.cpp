@@ -13,6 +13,7 @@ namespace larvio {
 bool StaticInitializer::tryIncInit(const std::vector<ImuData>& imu_msg_buffer,
     MonoCameraMeasurementPtr img_msg) {
   // return false if this is the 1st image for inclinometer-initializer
+   // 第一帧返回, 存储当前帧的特征点,以及时间戳
   if (0 == staticImgCounter) {
     staticImgCounter++;
     init_features.clear();
@@ -25,6 +26,7 @@ bool StaticInitializer::tryIncInit(const std::vector<ImuData>& imu_msg_buffer,
   }
 
   // calculate feature distance of matched features between prev and curr images
+  // 统计跟踪上的特征点的距离
   InitFeatures curr_features;
   list<double> feature_dis;
   for (const auto& feature : img_msg->features) {
@@ -35,23 +37,31 @@ bool StaticInitializer::tryIncInit(const std::vector<ImuData>& imu_msg_buffer,
       feature_dis.push_back((vec2d_c-vec2d_p).norm());
     }
   }
+
   // return false if number of matched features is small
+  // 匹配上的点太少, 返回
   if (feature_dis.empty() 
       || feature_dis.size()<20) {  
     staticImgCounter = 0;
     return false;
   }
+
+
   // ignore outliers rudely
-  feature_dis.sort();
+  // 去掉outliers导致的距离太大
+  feature_dis.sort();//根据distance排序
   auto itr = feature_dis.end();
   for (int i = 0; i < 19; i++)  
     itr--;
   double maxDis = *itr;
+
+
   // classified as static image if maxDis is smaller than threshold, otherwise reset image counter
+  // 如果满足运动小的阈值就自动计数++;
   if (maxDis < max_feature_dis) {
     staticImgCounter++;
     init_features.swap(curr_features);
-    if (staticImgCounter < static_Num)  // return false if number of consecitive static images does not reach @static_Num
+    if (staticImgCounter < static_Num)  //如果连续静止时间没达到1s return false if number of consecitive static images does not reach @static_Num
       return false;
   } else {
 //    printf("inclinometer-initializer failed at No.%d static image.",staticImgCounter+1);
